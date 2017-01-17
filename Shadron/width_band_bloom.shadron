@@ -1,0 +1,32 @@
+
+// Author: Andreas Wilcox, 2017
+
+#include <math_constants>
+#include <multisample>
+#include "rgb2hsv.shadron"
+
+parameter int sampleCount = 20 : range(1, 300);
+parameter float strength = 1 : range(0.1, 2);
+parameter float intensityClamp = 0.9 : range(0.8, 0.999);
+
+image BaseImage = file();
+
+glsl vec4 widthBandBloom(vec2 pos) {
+    float unitPerPixel = 1.0/512.0;
+
+    float addedBrightness = 0;
+    for(int xOffset = -sampleCount/2; xOffset <= sampleCount/2; xOffset++)
+    {
+        vec3 nearbyPixelRgb = texture(BaseImage, pos + vec2(xOffset*unitPerPixel, 0)).rgb;
+        float nearbyPixelBrightness = rgb2hsv(nearbyPixelRgb).z;
+        float distanceAdjustedBrightness = abs(nearbyPixelBrightness*(sampleCount/xOffset))/sampleCount;
+        addedBrightness += step(intensityClamp, nearbyPixelBrightness)*distanceAdjustedBrightness;
+    }
+
+    vec4 texture = texture(BaseImage, pos);
+    vec4 mixed = texture + vec4(texture.rgb*addedBrightness*strength, 1);
+
+    return mixed;
+}
+
+image WidthBandBloom = glsl(widthBandBloom, 512, 512);

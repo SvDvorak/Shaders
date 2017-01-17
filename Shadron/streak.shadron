@@ -1,0 +1,53 @@
+
+// Author: Andreas Wilcox, 2017
+
+#include "rgb2hsv.shadron"
+#include <multisample>
+
+parameter int strength = 1 : range(1, 500);
+parameter int offset = 1 : range(1, 1000);
+parameter int direction = 1 : range(-1, 1);
+parameter float bloomCutOff = 0.5 : range(0.2, 1.0);
+
+image BaseImage = file();
+
+glsl vec4 diagonal_streak_with_bloom_common(vec2 pos, int _strength, int _offset, int _direction) {
+    float unitPerPixel = 1.0/512.0;
+    vec2 screenCenterPos = pos - vec2(0.5, 0.5);
+
+    vec4 pixelColor = texture(BaseImage, pos);
+    vec4 combinedColor = vec4(0);
+    for(int offsetFromCenter = _offset; offsetFromCenter < _strength + _offset; offsetFromCenter++)
+    {
+        vec4 stepColor = texture(BaseImage, pos + vec2(offsetFromCenter*_direction)*unitPerPixel);
+        float blooming = 1 + clamp(rgb2hsv(stepColor.rgb).z - bloomCutOff, 0.0, 1.0)*_strength*0.1;
+        combinedColor += stepColor*blooming;
+    }
+
+    return vec4(combinedColor.rgb/_strength, 1);
+}
+
+glsl vec4 diagonal_streak_with_bloom(vec2 pos) {
+    return diagonal_streak_with_bloom_common(pos, strength, offset, direction);
+}
+
+glsl vec4 diagonal_streak_with_bloom_animation(vec2 pos, float time) {
+    float animationHalfLength = 0.55;
+    float stillDelay = 0.3;
+    float loopedTime = mod(time, animationHalfLength*2 + stillDelay); 
+    float stillDelayedTime = max(loopedTime-stillDelay, 0);
+    int direction = int(step(animationHalfLength, stillDelayedTime)*2 - 1);
+    float animationClampedTime = 
+        clamp(stillDelayedTime, 0, animationHalfLength) -
+        clamp(stillDelayedTime - animationHalfLength, 0, animationHalfLength);
+
+    float expTime = animationClampedTime*animationClampedTime;
+    int inputStrength = 1 + int(clamp(expTime*16, 0, 10)*140);
+    int inputOffset = int(clamp(expTime*2000, 0, 9999));
+    return diagonal_streak_with_bloom_common(pos, inputStrength, inputOffset, direction);
+}
+
+image Streak = glsl(diagonal_streak_with_bloom, 512, 512);
+
+animation StreakAnimation = 
+    glsl(diagonal_streak_with_bloom_animation, 1024, 1024);

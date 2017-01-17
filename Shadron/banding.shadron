@@ -1,0 +1,44 @@
+
+// Author: Andreas Wilcox, 2017
+
+#include <math_constants>
+#include "rgb2hsv.shadron"
+#include <multisample>
+
+parameter float strength = 5 : range(0.1, 20);
+parameter int blurSampling = 2 : range(1, 20);
+
+image BaseImage = file();
+
+glsl vec4 monochrome_banding_common(vec2 pos, float _strength, int _blurSampling) {
+    float unitPerPixel = 1.0/512.0;
+
+    // Extract sampling!
+    vec4 combinedColor;
+    int sampleSide = _blurSampling;
+    for(int i = 0; i < sampleSide*sampleSide; i++)
+    {
+        vec2 offset = vec2(i/sampleSide, i%sampleSide) + vec2(-sampleSide/2);
+        combinedColor += texture(BaseImage, pos + offset*unitPerPixel);
+    }
+
+    vec3 texture = combinedColor.rgb/(sampleSide*sampleSide);
+
+    float monochrome = (texture.x + texture.y + texture.z)/3;
+    vec3 banded = vec3(roundEven(monochrome*_strength)/_strength);
+
+    return vec4(banded, 1);
+}
+
+glsl vec4 monochrome_banding(vec2 pos) {
+    return monochrome_banding_common(pos, strength, blurSampling);
+}
+
+glsl vec4 monochrome_banding_animation(vec2 pos, float time) {
+    return monochrome_banding_common(pos, 1 + time, 1 + int(roundEven(time)));
+}
+
+image MonochromeBanding = glsl(monochrome_banding, 512, 512);
+
+animation MonochromeBandingAnimation = 
+    glsl(multisampleAnimation<monochrome_banding_animation, 1, 1>, 512, 512);

@@ -1,0 +1,53 @@
+
+// Author: Andreas Wilcox, 2017
+
+#include <math_constants>
+#include <multisample>
+
+parameter float borderMargin = 0.125 : range(0.0, 0.4);
+parameter float offset = 0 : range(0, 2);
+parameter float sinDistance = 7 : range(1, 0.1);
+parameter int cycles = 4 : range(1, 10);
+parameter float margin = 0.3 : range(0.01, 0.5);
+parameter float taper = 3 : range(1, 10); 
+parameter float glow = 1.5 : range(2.1, 0.1); 
+
+const float center = 0.5;
+const float epsilon = 0.00001;
+
+glsl vec2 marginClamp(vec2 pos)
+{
+    float x = (pos.x - borderMargin)/(1.0-2.0*borderMargin);
+    float y = (pos.y - borderMargin)/(1.0-2.0*borderMargin);
+    //float y = (pos.y - center + height/2)/height;
+
+    return vec2(x, y);
+}
+
+glsl vec3 marginColor(vec2 pos)
+{
+    float vMarginColor = min(- sign(pos.y - (1 - epsilon)), sign(pos.y));
+    float hMarginColor = min(- sign(pos.x - (1 - epsilon)), sign(pos.x));
+
+    return vec3(min(hMarginColor, vMarginColor));
+}
+
+glsl vec4 test(vec2 pos) {
+    vec2 clampedPos = marginClamp(pos);
+    vec3 marginColor = marginColor(clampedPos);
+
+    vec3 topColor = vec3(1.0, 0.975, 0.0);
+    vec3 botColor = vec3(1.0, 0.3125, 0.0);
+    vec3 mixedColor = mix(topColor, botColor, clampedPos.x);
+
+    float sine = sin((clampedPos.x+offset)*TAU*cycles);
+    //float yToSine = 1 - abs(sine*margin - clampedPos.y + center)*sinDistance;
+    float distanceToSine = (sine*margin - clampedPos.y + center);
+    float yToSine = abs(1/distanceToSine)*pow(sinDistance, 1);
+    float tapered = yToSine*pow(clampedPos.x, taper)*pow(1-clampedPos.x, taper);
+    return vec4(min(vec3(tapered), marginColor), 1);
+    //return vec4(max(clampedPos.x, vMarginColor), max(hMarginColor, clampedPos.y), 0, 1);
+    //return vec4(min(mixedColor, marginColor), 1);
+}
+
+image Test = glsl(test, 512, 512);
