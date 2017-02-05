@@ -1,0 +1,40 @@
+// Author: Andreas Wilcox, 2017
+
+#include <math_constants>
+
+parameter float initialCircleSize = 0.8 : range(0.1, 2);
+parameter float animationInSeconds = 5 : range(1, 10);
+parameter float spinSpeed = 2 : range(0.5, 8);
+parameter float spinAlpha = 0.5 : range(0.1, 0.9);
+
+image BaseImage = file() : map(clamp), filter(none);
+
+glsl vec4 minlol(float v1, float v2) {
+    return vec4(0, 0, 0, 0);
+}
+
+glsl vec4 dizzyCircle(vec2 pos, float time) {
+    vec2 imageSize = sizeof(BaseImage);
+    float aspectRatio = imageSize.y/imageSize.x;
+    time = clamp(time, 0, animationInSeconds);
+    float circleSize = initialCircleSize + (-initialCircleSize)*(time/animationInSeconds);
+    float spinSpeedAltered = spinSpeed + (time/animationInSeconds)*spinSpeed*0.5;
+
+    vec4 textureValue;
+    for(int i = 0; i < 6; i++)
+    {
+        float indexedCircleRotation = (time*spinSpeedAltered+(PI*2/6)*i);
+        vec2 circleOffset = vec2(cos(indexedCircleRotation)*circleSize*aspectRatio, sin(indexedCircleRotation)*circleSize);
+        vec4 color = texture(BaseImage, pos + circleOffset);
+        //textureValue = vec4((textureValue.rgb + color.rgb*color.a*0.3), max(textureValue.a, color.a));
+        textureValue = vec4(
+            max(textureValue.r, color.r*color.a),
+            max(textureValue.g, color.g*color.a),
+            max(textureValue.b, color.b*color.a),
+            max(textureValue.a, color.a));
+    }
+    float backgroundMultiplier = step(0.000001, 1-textureValue.a);
+    return vec4(0, 0, 0, 1)*backgroundMultiplier + textureValue*(1-backgroundMultiplier);
+}
+
+animation DizzyCircleAnimation = glsl(dizzyCircle, sizeof(BaseImage)/2);
