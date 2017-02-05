@@ -35,10 +35,16 @@ glsl vec4 monochrome_banding(vec2 pos) {
 }
 
 glsl vec4 monochrome_banding_animation(vec2 pos, float time) {
-    return monochrome_banding_common(pos, 1 + time, 1 + int(roundEven(time)));
+    float animationTime = 2;
+    float stillDelay = 0.3;
+    float loopedTime = mod(time, animationTime + stillDelay);
+    float stillDelayedTime = max(loopedTime-stillDelay, 0);
+    float pingPongTime =
+        clamp(stillDelayedTime, 0, animationTime/2) -
+        clamp(stillDelayedTime - animationTime/2, 0, animationTime);
+    return monochrome_banding_common(pos, (animationTime/2 - pingPongTime)*40, 1 + int(pingPongTime*10));
 }
 
-image MonochromeBanding = glsl(monochrome_banding, 512, 512);
+image MonochromeBanding = glsl(monochrome_banding, sizeof(BaseImage));
 
-animation MonochromeBandingAnimation = 
-    glsl(multisampleAnimation<monochrome_banding_animation, 1, 1>, 512, 512);
+animation MonochromeBandingAnimation = glsl(monochrome_banding_animation, sizeof(BaseImage)/2);

@@ -4,12 +4,12 @@
 #include <math_constants>
 #include <multisample>
 
-parameter float borderMargin = 0.125 : range(0.0, 0.4);
+parameter float borderMargin = 0 : range(0.0, 0.4);
 parameter float offset = 0 : range(0, 2);
-parameter float sinDistance = 7 : range(1, 0.1);
-parameter int cycles = 4 : range(1, 10);
-parameter float margin = 0.3 : range(0.01, 0.5);
-parameter float taper = 3 : range(1, 10); 
+parameter float sinDistance = 1.15 : range(7, 0.1);
+parameter int cycles = 3 : range(1, 10);
+parameter float margin = 0.1 : range(0.01, 0.5);
+parameter float taper = 2.17 : range(1, 10); 
 parameter float glow = 1.5 : range(2.1, 0.1); 
 
 const float center = 0.5;
@@ -32,7 +32,7 @@ glsl vec3 marginColor(vec2 pos)
     return vec3(min(hMarginColor, vMarginColor));
 }
 
-glsl vec4 test(vec2 pos) {
+glsl vec4 test(vec2 pos, float _offset) {
     vec2 clampedPos = marginClamp(pos);
     vec3 marginColor = marginColor(clampedPos);
 
@@ -40,7 +40,7 @@ glsl vec4 test(vec2 pos) {
     vec3 botColor = vec3(1.0, 0.3125, 0.0);
     vec3 mixedColor = mix(topColor, botColor, clampedPos.x);
 
-    float sine = sin((clampedPos.x+offset)*TAU*cycles);
+    float sine = sin((clampedPos.x+_offset)*TAU*cycles);
     //float yToSine = 1 - abs(sine*margin - clampedPos.y + center)*sinDistance;
     float distanceToSine = (sine*margin - clampedPos.y + center);
     float yToSine = abs(1/distanceToSine)*pow(sinDistance, 1);
@@ -50,4 +50,15 @@ glsl vec4 test(vec2 pos) {
     //return vec4(min(mixedColor, marginColor), 1);
 }
 
-image Test = glsl(test, 512, 512);
+glsl vec4 test_image(vec2 pos) {
+    return test(pos, offset);
+}
+
+glsl vec4 test_animation(vec2 pos, float time) {
+    return test(pos, time/2);
+}
+
+image Test = glsl(test_image, 512, 512);
+
+animation StreakAnimation = 
+    glsl(test_animation, 512, 512);

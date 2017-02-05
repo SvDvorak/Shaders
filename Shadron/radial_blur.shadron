@@ -6,19 +6,37 @@ parameter vec2 radialCenter = vec2(0.0, 0.0) : range(vec2(-0.5, -0.5), vec2(0.5,
 
 image BaseImage = file();
 
-glsl vec4 radialBlur(vec2 pos) {
+glsl vec4 radialBlur(vec2 pos, int _strength)
+{
     float unitPerPixel = 1.0/512.0;
     vec2 screenCenterPos = pos - vec2(0.5, 0.5);
 
     vec2 posToCenter = radialCenter - screenCenterPos;
 
     vec4 combinedColor = vec4(0);
-    for(int offsetFromCenter = 1; offsetFromCenter <= strength; offsetFromCenter++)
+    for(int offsetFromCenter = 1; offsetFromCenter <= _strength; offsetFromCenter++)
     {
         combinedColor = combinedColor + texture(BaseImage, pos + posToCenter*offsetFromCenter*unitPerPixel);
     }
 
-    return vec4((combinedColor/strength));
+    return vec4((combinedColor/_strength));
 }
 
-image RadialBlur = glsl(radialBlur, 512, 512);
+glsl vec4 radialBlurImage(vec2 pos) {
+    return radialBlur(pos, strength);
+}
+
+glsl vec4 radialBlurAnimation(vec2 pos, float time) {
+    float animationTime = 1;
+    float stillDelay = 0.3;
+    float loopedTime = mod(time, animationTime + stillDelay);
+    float stillDelayedTime = max(loopedTime-stillDelay, 0);
+    float pingPongTime =
+        clamp(stillDelayedTime, 0, animationTime/2) -
+        clamp(stillDelayedTime - animationTime/2, 0, animationTime);
+    return radialBlur(pos, 1 + int(pingPongTime*300*3));
+}
+
+image RadialBlur = glsl(radialBlurImage, 512, 512);
+
+animation RadialBlurAnimation = glsl(radialBlurAnimation, sizeof(BaseImage)/2);

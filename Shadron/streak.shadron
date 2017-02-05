@@ -50,4 +50,4 @@ glsl vec4 diagonal_streak_with_bloom_animation(vec2 pos, float time) {
 image Streak = glsl(diagonal_streak_with_bloom, sizeof(BaseImage));
 
 animation StreakAnimation = 
-    glsl(diagonal_streak_with_bloom_animation, sizeof(BaseImage));
+    glsl(diagonal_streak_with_bloom_animation, sizeof(BaseImage)/2);
