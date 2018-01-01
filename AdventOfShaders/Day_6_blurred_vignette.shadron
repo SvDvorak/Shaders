@@ -1,0 +1,58 @@
+#extension gif
+#include <multisample>
+
+image Input = file();
+parameter float Start = 0.5;
+parameter float Strength = 1 : range(1, 6);
+
+glsl vec4 vignette(vec2 pos, float start) {
+    float vignetteEdgeLength = (start + 0.0001) / Strength;
+
+    vec3 orig = texture(Input, pos).rgb;
+    float toCenter = length(pos - vec2(0.5));
+    if(toCenter < start) {
+        return vec4(orig, 1.0);
+    }
+    float vignetteAmount = clamp((toCenter - start) / vignetteEdgeLength, 0, 1);
+
+    vec3 sum = vec3(0);
+    float count = 0;
+    int sampleDistance = int(round(vignetteAmount * 3));
+    for(int y = -sampleDistance; y <= sampleDistance; y++) {
+        for(int x = -sampleDistance; x <= sampleDistance; x++) {
+            sum += texture(Input, pos + vec2(x, y)*2*shadron_PixelSize).rgb;
+            count += 1;
+        }
+    }
+    vec3 vignetteColor = sum/count;
+
+    vec3 color = mix(orig, vignetteColor, vignetteAmount);
+    return vec4(color, 1.0);
+}
+
+glsl vec4 vignetteStatic(vec2 pos) {
+    return vignette(pos, Start);
+}
+
+glsl vec4 vignetteAnimation(vec2 pos, float time) {
+    float animationAmount = 1.0/90.0;
+    float start = 0;
+    float partTime = 1.5;
+    float fullTime = mod(time, partTime*2);
+    float strength = 0.3;
+    float endRange = 0.2;
+    if(fullTime < partTime) {
+        start = (1 - (mod(fullTime, partTime) / partTime)) * strength + endRange;
+    }
+    else {
+        start = (mod(fullTime, partTime) / partTime) * strength + endRange;
+    }
+    return vignette(pos, animationAmount + start);
+}
+
+image OutputStatic = glsl(multisample<vignetteStatic, 3>, sizeof(Input));
+animation OutputAnimation = glsl(multisampleAnimation<vignetteAnimation, 4, 1>, sizeof(Input));
+
+//animation OutputAnimation = glsl(multisampleAnimation<vignetteAnimation, 4, 1>, vec2(512, 512));
+//animation QuantizedOutputAnimation = quantize(OutputAnimation, 32);
+//export gif(QuantizedOutputAnimation, "C:\\Users\\Unkno\\Desktop\\Tmp\\Shadron\\blurred_vignette.gif", 10, 3, true);

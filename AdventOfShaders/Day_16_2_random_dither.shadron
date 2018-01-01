@@ -1,0 +1,19 @@
+#include <perlin>
+
+image Input = file();
+
+glsl float rand(vec2 co){
+    return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453);
+}
+
+glsl vec4 ditherStatic(vec2 pos) {
+    vec3 color = texture(Input, pos).xyz;
+    float bwValue = (color.r + color.g + color.b)/3.0;
+    float result = 0;
+    if(rand(pos*10) > bwValue) {
+        result = 1;
+    }
+    return vec4(vec3(result), 1);
+}
+
+image DitherStatic = glsl(ditherStatic, vec2(512, 512));

@@ -1,0 +1,74 @@
+#extension gif
+#include <math_constants>
+#include <affine_transform>
+#include <icosahedron>
+#include <lighting>
+#include <perlin>
+//#include <multisample>
+
+const ivec2 DIMENSIONS = ivec2(1280, 720);
+const float FOV = 0.3*PI;
+const float NEAR = 1.0/256.0, FAR = 256.0;
+
+parameter vec3 color1 : color();
+parameter vec3 color2 : color();
+parameter vec3 color3 : color();
+
+glsl struct FragmentData {
+    vec3 coord;
+    vec3 normal;
+};
+
+glsl float noise(vec2 pos) {
+    float final_val = 0.5;
+
+    int max_octaves = 16;
+
+    float frequency = 0.6;
+    float lacunarity = 2;
+
+    float amplitude = 0.2;
+    float gain = 0.5;
+
+    for (int octave = 0; octave < max_octaves; ++octave){
+        final_val += amplitude * perlinNoise(pos * frequency);
+        
+        frequency *= lacunarity;
+        amplitude *= gain;
+    }
+    return final_val;
+}
+
+glsl vec4 vertexShader(out FragmentData f, int index, float time) {
+    f.coord = icosahedronCoord(index);
+    f.coord = rotateY(f.coord, time);
+    f.coord = translate(f.coord, vec3(0, 0, -6));
+    return projectPerspectiveHFOV(f.coord, FOV, NEAR, FAR);
+}
+
+glsl vec3 unitColor(float r, float g, float b) {
+    return vec3(r / 255, g / 255, b / 255);
+}
+
+glsl vec4 fragmentShader(in FragmentData f, float time) {
+    float dist = f.coord.z + 6;
+    float q = noise(f.coord.xy + vec2(f.coord.y, 3));
+    float r = noise(f.coord.xy + vec2(f.coord.z, 0.3) + q);
+    float s = noise(f.coord.xy + vec2(0, f.coord.z) + r);
+    return vec4(
+        mix(mix(color1, color2, r), color3, s),
+        1);
+    return vec4(step(0.4, q)*color1 + vec3(0, r, s), 1);
+}
+
+//const float background = 0.825;
+
+model animation Icosahedron :
+    dimensions(DIMENSIONS),
+    fragment_data(FragmentData),
+    vertex_animated(vertexShader, ICOSAHEDRON_PRIMITIVES, ICOSAHEDRON_VERTEX_COUNT),
+    fragment_animated(fragmentShader),
+    background(vec4(vec3(0.925, 0.825, 0.825), 1));
+
+//animation QuantizedOutputAnimation = quantize(Icosahedron, 32);
+//export gif(QuantizedOutputAnimation, "C:\\Users\\Unkno\\Desktop\\Tmp\\Shadron\\Day_7_3D_noise.gif", 10, 3, true);

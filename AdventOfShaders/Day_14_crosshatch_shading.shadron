@@ -1,0 +1,102 @@
+#extension gif
+#include <perlin>
+
+/*
+    float dx = 1;
+    float dy = 1;
+    float lineThickness = 1;
+    float offset = 0;
+    abs(dy*pixelPos.x - dx*pixelPos.y + dx*offset) < lineThickness)
+*/
+
+parameter float Density = 0.1 : logrange(0.001, 1);
+parameter float LineThickness = 4 : logrange(1, 40);
+
+glsl vec4 crosshatch(vec2 pos, float deltaY, float density, float lineThickness) {
+    vec2 pixelPos = pos/shadron_PixelSize;
+    float dx = 1;
+    float dy = deltaY;
+    float offset = 0;
+    if(mod((dy*pixelPos.x - dx*pixelPos.y), 1/density) < lineThickness) {
+        return vec4(vec3(1), 1);
+    }
+    return vec4(0);
+}
+
+glsl vec4 crosshatchStatic(vec2 pos) {
+    vec3 value = 1 - (
+        crosshatch(pos, 1, Density, LineThickness).xyz +
+        crosshatch(pos, -1.2, Density, LineThickness).xyz);
+    return vec4(value, 1);
+}
+
+image Crosshatch = glsl(crosshatchStatic, vec2(1024, 1024));
+
+
+//---------------------------------------------------
+// Borrowed and modified example from Viktor Chlumsky, 2016
+
+
+#include <math_constants>
+#include <affine_transform>
+#include <lighting>
+#include <icosahedron>
+#include <linearstep>
+
+// Distance between the camera and the center of the cube
+parameter float distance = 6.0 : range(16.0);
+// Near/far values for projection (minimum and maximum draw distance)
+const float NEAR = 1.0/256.0, FAR = 256.0;
+// Direction of incoming light
+const vec3 lightDirection = vec3(0.0, 0.0, -1.0);
+
+// The fragment data passed from the vertex shader to the fragment shader
+glsl struct FragmentData {
+    vec3 coord;
+    vec3 normal;
+};
+
+// The vertex shader
+glsl vec4 vertexShader(out FragmentData f, int index) {
+    // Acquire vertex coordinate, texture coordinate, and normal vector
+    f.coord = icosahedronCoord(index);
+    f.normal = icosahedronNormal(index);
+
+    // Transform coordinate
+    vec2 rotation = vec2(-0.375, 0.4375) + 0.0078125*shadron_Mouse.xy;
+    f.coord = rotateY(f.coord, rotation.x);
+    f.coord = rotateX(f.coord, rotation.y);
+    f.coord = translate(f.coord, vec3(0.0, 0.0, -distance));
+
+    // Transform normal
+    f.normal = rotateY(f.normal, rotation.x);
+    f.normal = rotateX(f.normal, rotation.y);
+
+    // Perspective projection
+    float fov = 0.5*PI-atan(0.75+0.0625*shadron_Mouse.z);
+    return projectPerspectiveHFOV(f.coord, fov, NEAR, FAR);
+}
+
+// The fragment shader
+glsl vec3 fragmentShader(in FragmentData f, float time) {
+    vec3 rotatedLight = rotateY(lightDirection, -PI + time);
+    float lightness = diffuseLight(rotatedLight, f.normal);
+    float darkness = linearstep(0.3, 1.0, 1 - lightness);
+    float doubleHatchStep = linearstep(0.5, 1.0, darkness);
+    vec4 hatches =
+        crosshatch(f.coord.xy, 1, 0.03, 25*darkness) +
+        crosshatch(f.coord.xy, -1.2, 0.03, 25*darkness)*doubleHatchStep;
+    return mix(vec4(0.91), 1 - hatches, darkness);
+}
+
+// Cube model definition
+model animation CrosshatchIcosahedron :
+    background(vec4(vec3(0.8), 1)),
+    fragment_data(FragmentData),
+    vertex(vertexShader, ICOSAHEDRON_PRIMITIVES, ICOSAHEDRON_VERTEX_COUNT),
+    fragment_animated(fragmentShader),
+    multisample(4);
+
+//animation OutputAnimation = glsl(noiseImageAnimation, vec2(512, 512));
+animation QuantizedOutputAnimation = quantize(CrosshatchIcosahedron, 32);
+export gif(QuantizedOutputAnimation, "C:\\Users\\Unkno\\Desktop\\Tmp\\Shadron\\Day_14_crosshatch_shading.gif", 10, PI*2, true);

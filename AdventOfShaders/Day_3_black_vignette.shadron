@@ -1,0 +1,48 @@
+#extension gif
+
+image Input = file();
+parameter vec3 Vignette : color();
+parameter float Start = 0.5;
+parameter float Strength = 1 : range(1, 6);
+parameter bool BondStyle = false;
+
+glsl vec4 vignette(vec2 pos, float start) {
+    float vignetteEdgeLength = (start + 0.0001) / Strength;
+    if(BondStyle) {
+        vignetteEdgeLength = 0;
+    }
+
+    vec3 orig = texture(Input, pos).rgb;
+    float toCenter = length(pos - vec2(0.5));
+    if(toCenter < start) {
+        return vec4(orig, 1.0);
+    }
+    float vignetteAmount = (toCenter - start) / vignetteEdgeLength;
+    vec3 color = mix(orig, Vignette, vignetteAmount);
+    return vec4(color, 1.0);
+}
+
+glsl vec4 vignetteStatic(vec2 pos) {
+    return vignette(pos, Start);
+}
+
+glsl vec4 vignetteAnimation(vec2 pos, float time) {
+    float animationAmount = 1.0/90.0;
+    float start = 0;
+    float partTime = 1.5;
+    float fullTime = mod(time, partTime*2);
+    if(fullTime < partTime) {
+        start = (1 - (mod(fullTime, partTime) / partTime)) * 0.2 + 0.35;
+    }
+    else {
+        start = (mod(fullTime, partTime) / partTime) * 0.2 + 0.35;
+    }
+    return vignette(pos, animationAmount + start);
+}
+
+image OutputStatic = glsl(vignetteStatic, sizeof(Input));
+animation OutputAnimation = glsl(vignetteAnimation, sizeof(Input));
+
+//animation OutputAnimation = glsl(vignetteAnimation, vec2(512, 512));
+//animation QuantizedOutputAnimation = quantize(OutputAnimation, 32);
+//export gif(QuantizedOutputAnimation, "C:\\Users\\Unkno\\Desktop\\Tmp\\Shadron\\black_vignette.gif", 10, 3, true);

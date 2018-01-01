@@ -1,0 +1,30 @@
+#include <perlin>
+
+image Input = file() : map(clamp);
+
+parameter float Brightness = 1.2 : range(0.8, 1.8);
+parameter float Noise = 0.4 : range(0, 1);
+
+glsl float rand(vec2 co){
+    return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453);
+}
+
+glsl vec4 ditherStatic(vec2 pos) {
+    const int patternDim = 4;
+    const int patternLength = patternDim*patternDim;
+    int[patternLength] patterns = int[patternLength](
+        1, 9, 3, 11,
+        13, 5, 15, 7,
+        4, 12, 2, 10,
+        16, 8, 14, 6
+    );
+    ivec2 pixel = ivec2(pos/shadron_PixelSize);
+    vec2 samplePos = vec2(pixel.x - mod(pixel.x, patternDim), pixel.y - mod(pixel.y, patternDim));
+    vec3 color = texture(Input, samplePos*shadron_PixelSize).xyz;
+    float bwValue = min(1.0, (color.r + color.g + color.b)/3.0*Brightness);
+    int patternOffset = pixel.x % patternDim + (pixel.y % patternDim)*patternDim;
+    float use = int(bwValue * patternLength + 0.5) - patterns[patternOffset];
+    return vec4(vec3(use), 1);
+}
+
+image DitherStatic = glsl(ditherStatic, sizeof(Input));

@@ -1,0 +1,30 @@
+#extension gif
+#include <hsv>
+
+image Input = file();
+parameter vec3 HueColorCorrection : color();
+parameter float SaturationCorrection = 1;
+parameter float ValueCorrection = 1;
+
+glsl vec4 colorCorrectPoint(vec2 pos, vec3 color, float sat, float value) {
+    vec3 orig = texture(Input, pos).rgb;
+    vec3 origHSV = vec3(1.0, saturation(orig), value(orig));
+    float mixStrength = saturation(color);
+
+    float hue = hue(mix(orig, color, mixStrength));
+    vec3 corrected = hsv(hue, origHSV.g*sat, origHSV.b*value);
+    return vec4(corrected, 1.0);
+}
+
+glsl vec4 colorCorrect(vec2 pos) {
+    return colorCorrectPoint(pos, HueColorCorrection, SaturationCorrection, ValueCorrection);
+}
+
+glsl vec4 colorCorrectAnimation(vec2 pos, float time) {
+    return colorCorrectPoint(pos, hsv(sin(time*1.1), sin(time)/2, 1), SaturationCorrection, ValueCorrection);
+}
+
+image Output = glsl(colorCorrect, sizeof(Input));
+animation OutputAnimation = glsl(colorCorrectAnimation, vec2(512, 512));//sizeof(Input));
+//animation QuantizedOutputAnimation = quantize(OutputAnimation, 32);
+//export gif(QuantizedOutputAnimation, "C:\\Users\\Unkno\\Desktop\\Tmp\\Shadron\\color_correction.gif", 10, 4, true);

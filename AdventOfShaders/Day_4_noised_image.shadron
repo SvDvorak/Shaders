@@ -1,0 +1,61 @@
+#extension gif
+#include <perlin>
+
+image Input = file() : map(clamp);
+parameter float Shift = 1 : range(1, 10);
+
+glsl float noise(vec2 pos, float shift) {
+    pos = pos + shift;
+    float final_val = 0.5;
+
+    int max_octaves = 16;
+
+    float frequency = 0.6;
+    float lacunarity = 2;
+
+    float amplitude = 0.2;
+    float gain = 0.5;
+
+    for (int octave = 0; octave < max_octaves; ++octave){
+        final_val += amplitude * perlinNoise(pos * frequency);
+        
+        frequency *= lacunarity;
+        amplitude *= gain;
+    }
+    return final_val;
+}
+
+glsl float fbm(vec2 pos, float shift) {
+    vec2 q = vec2(noise(pos + vec2(0), shift), noise(pos + vec2(5.2, 1.3), shift));
+    vec2 r = vec2(noise(pos + 4*q + vec2(0), shift), noise(pos + 4*q + vec2(5.2, 1.3), shift));
+    return noise(pos + 4*r, shift);
+}
+
+glsl vec4 baseNoiseStatic(vec2 pos) {
+    return vec4(vec3(noise(pos, Shift)), 1);
+}
+
+glsl vec4 noiseStatic(vec2 pos) {
+    return vec4(vec3(fbm(pos, Shift)), 1);
+}
+
+glsl vec4 noiseImageStatic(vec2 pos) {
+    vec3 noise = texture(Input, pos - (fbm(pos, Shift) - 0.5)*0.09).rgb;
+    return vec4(noise, 1);
+}
+
+glsl vec4 noiseImageAnimation(vec2 pos, float time) {
+    float speed = 0.04;
+    float loopedTime = pow(max(0, mod(time, 6)-0.7), 2);
+
+    float noise = (fbm(pos, time/6) - 0.5)*0.09;
+    vec3 noisedImage = texture(Input, pos + noise).rgb;
+    return vec4(noisedImage, 1);
+}
+
+image BaseNoiseStatic = glsl(baseNoiseStatic, sizeof(Input));
+image NoiseStatic = glsl(noiseStatic, sizeof(Input));
+image OutputStatic = glsl(noiseImageStatic, sizeof(Input));
+animation OutputAnimation = glsl(noiseImageAnimation, vec2(512, 512));
+//animation QuantizedOutputAnimation = quantize(OutputAnimation, 32);
+//export gif(QuantizedOutputAnimation, "C:\\Users\\Unkno\\Desktop\\Tmp\\Shadron\\noised_image.gif", 10, 2, true);

@@ -1,0 +1,63 @@
+#extension gif
+#include <math_constants>
+#include <affine_transform>
+#include <perlin>
+
+const ivec2 DIMENSIONS = ivec2(1280, 1280);
+
+parameter int Levels = 1 : range(0, 7);
+parameter int Edges = 3 : range(1, 5);
+parameter int animationTime : range(1, 5);
+
+glsl vec4 kochFlake(int index, float time) {
+   vec2[5] points = vec2[5](
+        vec2(0.0, 0.0),
+        vec2(1.0/3.0, 0.0),
+        vec2(0.5, 0.5/3.0*ROOT3),
+        vec2(2.0/3.0, 0.0),
+        vec2(1.0, 0.0)
+    );
+
+    float[5] slopes = float[5](
+        0, PI/3, -PI/3, 0, 0
+    );
+
+    int levels = int(mod(time, animationTime)/animationTime*7);
+    //int levels = Levels;
+    int total = int(pow(2, levels*2));
+    vec2 point = vec2(0, 0);
+    float slope = 0;
+    vec2 offset = vec2(0.5, -0.25*(Edges-2));
+
+    if(index > total*Edges) {
+        return vec4(-offset, 0, 1);
+    }
+
+    // Figure out what edge we're on
+    for(int edgeNr = index/total; edgeNr > 0; edgeNr--) {
+        point += rotate(points[4], slope);
+        slope += -TAU/Edges;
+        index -= total;
+    }
+
+    for(int currentLevel = levels; currentLevel > 0; currentLevel--) {
+        int partSize = total/4;
+        int lowerBound = index/partSize;
+        index -= lowerBound*partSize;
+
+        vec2 nextPoint = points[lowerBound]*pow(1.0/3.0, levels-currentLevel);
+        point += rotate(nextPoint, slope);
+        slope += slopes[lowerBound];
+        total = partSize;
+    }
+
+    return vec4(point - offset, 0, 1);
+}
+
+model animation KochFlake :
+    background(vec4(vec3(0), 1)),
+    dimensions(DIMENSIONS),
+    vertex_animated(kochFlake, line_strip, pow(2, Levels*2)*Edges + 1);
+
+//animation QuantizedOutputAnimation = quantize(KochFlake, 32);
+//export gif(QuantizedOutputAnimation, "C:\\Users\\Unkno\\Desktop\\Tmp\\Shadron\\Day_10_koch_snowflake.gif", 10, 4, true);

@@ -1,0 +1,93 @@
+#extension gif
+#include <perlin>
+
+image Input = file() : map(clamp);
+parameter float Shift = 1 : range(1, 10);
+parameter float WaveNoiseAmount = 0.6 : range(0.3, 0.6);
+const vec2 outputSize = vec2(512, 512);
+
+glsl float noise(vec2 pos) {
+    float final_val = 0.5;
+
+    int max_octaves = 16;
+
+    float frequency = 0.6;
+    float lacunarity = 2;
+
+    float amplitude = 0.2;
+    float gain = 0.5;
+
+    for (int octave = 0; octave < max_octaves; ++octave){
+        final_val += amplitude * perlinNoise(pos * frequency);
+        
+        frequency *= lacunarity;
+        amplitude *= gain;
+    }
+    return final_val;
+}
+
+glsl float noise(float value) {
+    return noise(vec2(value));
+}
+
+glsl float fbm(vec2 pos) {
+    vec2 q = vec2(noise(pos + vec2(0)), noise(pos + vec2(5.2, 1.3)));
+    vec2 r = vec2(noise(pos + 4*q + vec2(0)), noise(pos + 4*q + vec2(5.2, 1.3)));
+    return noise(pos + 4*r);
+}
+
+glsl vec4 waveNoise(vec2 pos, float shift) {
+    vec2 noisePosition = vec2(pos.y*noise(vec2(pos.x*0.000001))+noise(vec2(pos.x))*0.08, pos.y) + shift;
+    float noise = clamp(fbm(noisePosition) + WaveNoiseAmount, 1.0, 1.0 + WaveNoiseAmount) - 1.0;
+    return vec4(vec3(noise), 1);
+}
+
+glsl vec4 mergedPixelsWave(vec2 pos, float shift) {
+    vec2 noisePosition = vec2(pos.y, pos.y) + shift;
+    float noise = fbm(noisePosition);
+
+    float sampleCount = 8.0;
+    float sampleLength = 20.0;
+    float roundedY = int(noisePosition.y * sampleLength)/sampleLength;
+    for(int i = 1; i < sampleCount; i++) {
+        float nextNoise = fbm(vec2(roundedY, roundedY)+vec2(0, (sampleLength/100)/sampleCount));
+        if(nextNoise < 0.65) {
+            return vec4(vec3(0), 1);
+        }
+    }
+    float distance = (noisePosition.y - roundedY)*sampleLength;
+    return vec4(vec3(1 - pow(1-distance, 4)), 1);
+}
+
+glsl vec4 noiseStatic(vec2 pos) {
+    return waveNoise(pos, Shift);
+}
+
+image NoiseStatic = glsl(noiseStatic, outputSize);
+
+
+glsl vec4 mergedPixelsStatic(vec2 pos) {
+    return mergedPixelsWave(pos, Shift);
+}
+
+image MergedPixelsStatic = glsl(mergedPixelsStatic, outputSize);
+
+glsl vec4 noiseImageAnimation(vec2 pos, float time) {
+    time += Shift;
+    float noise = waveNoise(pos, time*0.2).r;
+    float strength = 0.03;
+    vec4 mergeValue = mergedPixelsWave(pos, time*0.2+noise(vec2(time))*0.15);
+    if(mergeValue.r > 0.1) {
+        vec2 roundedPos = vec2(pos.x, round(pos.y*20.0)/20.0);
+        return mix(vec4(vec3(0), 1), texture(Input, roundedPos), mergeValue.r)*2;
+    }
+    vec3 outputImage = texture(Input, pos + vec2(noise)*strength - 0.5*strength).rgb;
+    return vec4(outputImage, 1);
+}
+
+animation OutputAnimation = glsl(noiseImageAnimation, outputSize);//sizeof(Input));//;
+animation QuantizedOutputAnimation = quantize(OutputAnimation, 32);
+export gif(QuantizedOutputAnimation, "C:\\Users\\Unkno\\Desktop\\Tmp\\Shadron\\Day_13_continued_glitching.gif", 10, 5, true);
+
+
+// ADD CHROMATIC DISTORTION, CHECK OUT VHS EFFECTS

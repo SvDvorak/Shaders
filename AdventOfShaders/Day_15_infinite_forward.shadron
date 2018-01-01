@@ -1,0 +1,32 @@
+#extension gif
+#include <linearstep>
+
+const float SpeedMultiplier = 0.12;
+parameter vec3 BackgroundColor = vec3(0) : color();
+parameter vec3 LineColor = vec3(1) : color();
+
+glsl vec4 lines(vec2 pos, float time, float deltaX, float deltaY) {
+    float dx = deltaX;
+    float dy = deltaY;
+    float density = 0.06;
+    float lineThickness = 1;
+    float distance = 0.52;
+
+    pos = distance - vec2(abs(pos.x - 0.5), abs(pos.y - 0.5));
+    vec2 adjustedPos = vec2(pos.x*pos.x + time*SpeedMultiplier, 0.0);
+    vec2 pixelPos = adjustedPos/shadron_PixelSize;
+    float toCenterX = linearstep(0.0, distance, pos.x);//(pos.x+pos.y)/2);
+    if(pos.x - 0.5 < 0.0 && mod((dy*pixelPos.x - dx*pixelPos.y), 1/density) < lineThickness) {
+        return vec4(mix(LineColor, BackgroundColor, toCenterX*toCenterX), 1);
+    }
+    return vec4(BackgroundColor, 1);
+}
+
+glsl vec4 infinite(vec2 pos, float time) {
+    return lines(pos, time, 0.0, 1.0);// + lines(vec2(pos.y, pos.x), time, 0.0, 1.0);
+}
+
+animation Infinite = glsl(infinite, vec2(512, 512));
+
+//animation QuantizedOutputAnimation = quantize(Infinite, 32);
+//export gif(QuantizedOutputAnimation, "C:\\Users\\Unkno\\Desktop\\Tmp\\Shadron\\Day_15_infinite_forward.gif", 20, 2.0*(1+SpeedMultiplier)-SpeedMultiplier/2.0, true);

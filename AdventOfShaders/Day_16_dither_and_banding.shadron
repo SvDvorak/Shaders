@@ -1,0 +1,24 @@
+#extension gif
+#include <dither>
+#include <perlin>
+
+image Input = file();
+parameter int Banding = 1 : range(0, 64);
+
+glsl float band(float value) {
+    return int(value*Banding)/float(Banding);
+}
+
+glsl vec4 ditherStatic(vec2 pos) {
+    //float color = (pos.x + pos.y)/2;
+    vec3 color = texture(Input, pos).xyz;
+    float bwValue = (color.r + color.g + color.b)/3.0;
+    //float result = band(bwValue)*1.3;
+    //result += (dither<8>(ivec2(gl_FragCoord.xy))-0.5);
+    return vec4(vec3(bwValue), 1);
+}
+
+image DitherStatic = glsl(ditherStatic, vec2(512, 512));
+
+image QuantizedOutputAnimation = quantize(DitherStatic, 2);
+//export gif(QuantizedOutputAnimation, "C:\\Users\\Unkno\\Desktop\\Tmp\\Shadron\\Day_14_crosshatch_shading.gif", 10, PI*2, true);

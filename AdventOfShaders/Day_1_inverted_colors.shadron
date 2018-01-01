@@ -1,0 +1,10 @@
+
+image Input = file();
+
+glsl vec4 inverse(vec2 pos) {
+    vec3 orig = texture(Input, pos).rgb;
+    vec3 inverse = vec3(1 - orig.r, 1 - orig.g, 1 - orig.b);
+    return vec4(inverse, 1.0);
+}
+
+image Output = glsl(inverse, sizeof(Input));

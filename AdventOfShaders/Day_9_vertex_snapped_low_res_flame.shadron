@@ -1,0 +1,102 @@
+#extension gif
+#include <math_constants>
+#include <affine_transform>
+#include <icosahedron>
+#include <lighting>
+#include <perlin>
+#include <multisample>
+
+const ivec2 DIMENSIONS = ivec2(1280, 720);
+const float FOV = 0.3*PI;
+const float NEAR = 1.0/256.0, FAR = 256.0;
+const vec3 center = vec3(0, -0.4, -6);
+
+parameter float vertexSnap : range(0.01, 0.1);
+parameter int pixelSnap : range(1, 20);
+
+parameter vec3 inner : color();
+parameter vec3 edge : color();
+parameter vec3 background : color();
+
+glsl struct FragmentData {
+    vec3 coord;
+    vec3 normal;
+};
+
+glsl vec3 unitColor(float r, float g, float b) {
+    return vec3(r / 255, g / 255, b / 255);
+}
+
+glsl vec3 moveAndDistort(vec3 coord, float time) {
+    coord = translate(coord, center);
+    coord += perlinNoise(coord)/10;
+    float centerY = max(0, coord.y-center.y)*(coord.y-center.y)*0.75;
+    coord.y += centerY*(1+perlinNoise(vec2(coord.x, time*2)));
+
+    coord.x = coord.x - mod(coord.x, vertexSnap*abs(coord.z));
+    coord.y = coord.y - mod(coord.y, vertexSnap*abs(coord.z));
+    return coord;
+}
+
+glsl vec4 hedron1Vertex(out FragmentData f, int index, float time) {
+    f.coord = icosahedronCoord(index);
+    f.coord = rotateY(f.coord, time*3.14/4);
+    f.coord = moveAndDistort(f.coord, time);
+    return projectPerspectiveHFOV(f.coord, FOV, NEAR, FAR);
+}
+
+glsl vec4 hedron2Vertex(out FragmentData f, int index, float time) {
+    f.coord = icosahedronCoord(index);
+    f.coord = rotateX(f.coord, -time*3.14/4);
+    f.coord = moveAndDistort(f.coord, time);
+    return projectPerspectiveHFOV(f.coord, FOV, NEAR, FAR);
+}
+
+glsl vec4 hedronFragment(in FragmentData f, float time) {
+    float innerNoise = perlinNoise(f.coord + vec3(0, -time*2, 0) + perlinNoise(f.coord*7 + vec3(0, -time*12, 0)));
+    vec3 diffuse = inner*(vec3(innerNoise)/4+1);
+
+    float edgeStrength = clamp(-4.8-f.coord.z, 0.3, 1.0);
+    float edgeColorSubtract = 1.2-edgeStrength;
+    vec3 edgeDiffuse = mix(vec3(0), edge, edgeStrength);
+
+    return vec4(mix(edgeDiffuse, diffuse, f.coord.z + abs(center.z)), 1);
+}
+
+model animation hedron1 :
+    dimensions(DIMENSIONS),
+    fragment_data(FragmentData),
+    vertex_animated(hedron1Vertex, ICOSAHEDRON_PRIMITIVES, ICOSAHEDRON_VERTEX_COUNT),
+    fragment_animated(hedronFragment);
+
+model animation hedron2 :
+    dimensions(DIMENSIONS),
+    fragment_data(FragmentData),
+    vertex_animated(hedron2Vertex, ICOSAHEDRON_PRIMITIVES, ICOSAHEDRON_VERTEX_COUNT),
+    fragment_animated(hedronFragment);
+
+glsl float snap(float pos) {
+    return (floor(pos / pixelSnap) + 0.5) * pixelSnap;
+}
+
+glsl vec4 vignette(vec4 current, vec2 pos, float start) {
+    float strength = 1;
+    float vignetteEdgeLength = (start + 0.0001) / strength;
+
+    float toCenter = length(pos - vec2(0.5));
+    float vignetteAmount = (toCenter - start) / vignetteEdgeLength;
+    vignetteAmount = clamp(vignetteAmount, -0.4, 1);
+    return vec4(mix(current.xyz, vec3(0), vignetteAmount), 1.0);
+}
+
+glsl vec4 finalFragment(vec2 pos, float time) {
+    vec2 pixelPos = pos / shadron_PixelSize;
+    vec2 snapped = vec2(snap(pixelPos.x), snap(pixelPos.y))*shadron_PixelSize;
+    vec4 hedronsDiffuse = (texture(hedron1, snapped) * texture(hedron2, snapped));
+    vec4 combined = vec4(hedronsDiffuse.xyz + (1-hedronsDiffuse.a)*background, 1);
+    return vignette(combined, snapped, 0.5);
+}
+
+animation Composite = glsl(multisampleAnimation<finalFragment, 2, 1>, DIMENSIONS);
+//animation QuantizedOutputAnimation = quantize(Composite, 32);
+//export gif(QuantizedOutputAnimation, "C:\\Users\\Unkno\\Desktop\\Tmp\\Shadron\\Day_9_vertex_snapped_low_res_flame.gif", 10, 3.14, true);

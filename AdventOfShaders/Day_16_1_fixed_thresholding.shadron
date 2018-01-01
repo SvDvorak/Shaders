@@ -1,0 +1,13 @@
+image Input = file();
+
+glsl vec4 ditherStatic(vec2 pos) {
+    vec3 color = texture(Input, pos).xyz;
+    float bwValue = (color.r + color.g + color.b)/3.0;
+    float result = 0;
+    if(bwValue > 0.5) {
+        result = 1;
+    }
+    return vec4(vec3(result), 1);
+}
+
+image DitherStatic = glsl(ditherStatic, vec2(512, 512));
