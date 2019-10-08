@@ -2,24 +2,26 @@
 #include <affine_transform>
 #include <linearstep>
 #include <multisample>
+#include <perlin>
 
 #extension ffmpeg
 #extension gif
 
 // Near/far values for projection (minimum and maximum draw distance)
 const float NEAR = 1.0/256.0, FAR = 256.0;
-const int PARTICLE_COUNT = 4;
+const int WAVECOUNT = 4;
+const ivec2 RESOLUTION = ivec2(512, 512);
 
 param int Sections = 80 : range(4, 80);
 param float Width = 0.056 : range(0.02, 0.3);
-param float Spacing = 3.8 : range(1, 10);
-param float Strength = 30 : range(1, 60);
+param float Spacing = 4 : range(1, 10);
+param float Strength = 32 : range(1, 60);
 param vec3 Color = vec3(1) : color();
 param bool Wireframe = false;
 
 #define Vertices (2+Sections*2)
 
-glsl struct ParticleData {
+glsl struct WaveParticleData {
     float index;
     float height;
     float time;
@@ -65,18 +67,18 @@ glsl vec3 fragmentShader(in FragmentData fd) {
     return mix(transparent, Color, heightFade);
 }
 
-glsl vec4 p_vert(out FragmentData fd, in ParticleData p, int index) {
+glsl vec4 p_vert(out FragmentData fd, in WaveParticleData p, int index) {
     fd.height = p.height;
     return vertexShader(index, p.time, p.height, p.index);
 }
 
-glsl void initialize(out ParticleData p, int i) {
+glsl void initialize(out WaveParticleData p, int i) {
     p.index = i;
-    p.height = float(i) / PARTICLE_COUNT;
+    p.height = float(i) / WAVECOUNT;
     p.time = i * 2;
 }
 
-glsl void update(inout ParticleData p, float dt) {
+glsl void update(inout WaveParticleData p, float dt) {
     p.time += dt;
     p.height = mod(p.height + dt / 3, 1);
 }
@@ -88,31 +90,90 @@ model WaveCircle :
     wireframe(Wireframe);
 
 particle_system animation WaveParticles :
-    dimensions(ivec2(512, 512)),
-    particle_data(ParticleData),
+    dimensions(RESOLUTION),
+    particle_data(WaveParticleData),
     initialize(initialize),
     update(update),
     vertex(p_vert, triangle_strip, Vertices),
     fragment_data(FragmentData),
     fragment(fragmentShader),
-    count(PARTICLE_COUNT),
+    count(WAVECOUNT),
     background(vec3(0.0)),
     multisample(4);
 
 
 
 glsl struct DustParticleData {
-    float index;
-    float height;
-    float time;
+    vec2 pos;
+    float phase;
+    float size;
 };
 
-glsl struct DustFragmentData {
-    float height;
-};
+glsl float random(int seed, int salt) {
+    vec2 pCoord = mod(vec2(1949.1797*float(seed), 33.1478221*float(salt)), 1823.5355121);
+    return 0.5*(perlinNoise(pCoord)+1.0);
+}
 
-// particle_system animation DustParticles :
-//     dimensions(ivec2(512, 512)),
+glsl void particle_initialize(out DustParticleData p, int i) {
+    p.pos = vec2(random(i, 0) - 0.5, random(i, 1) - 0.5) * vec2(1.5, 12);
+    p.phase = TAU*random(i, 2);
+    float baseSize = 0.05+random(i, 3) * 0.05;
+    p.size = 0.15*baseSize;
+}
+
+glsl void particle_update(inout DustParticleData p, float dt) {
+    float y = 0.5*(1.0-p.pos.y);
+    p.pos += dt*vec2(sin(p.phase)*0.05, 0.45);
+    p.pos = mod(p.pos+1, 2)-1;
+    p.phase += dt;
+}
+
+const int particleVertexCount = 16;
+
+glsl vec2 vertex(out float height, in DustParticleData p, int i) {
+    vec2 coord = vec2(0.0);
+    if (i > 0) {
+        float a = 1.0/(particleVertexCount-2)*TAU*float(i-1);//+p.rot;
+        float aspect = shadron_PixelSize.x/shadron_PixelSize.y;
+        coord = p.size*vec2(aspect*sin(a), cos(a));
+    }
+    coord = p.pos+coord;
+    height = p.pos.y * 0.8 + 0.5;
+    return coord;
+}
+
+glsl vec3 fragment(in float height) {
+    const vec3 transparent = vec3(0);
+    float heightFade = 0.6 * linearstep(0, 0.15, height) * linearstep(1, 0.9, height);
+    return mix(transparent, Color, heightFade);
+}
+
+const int PARTICLE_COUNT = 10;
+
+particle_system animation Particles :
+    dimensions(RESOLUTION),
+    particle_data(DustParticleData),
+    fragment_data(vec3),
+    initialize(particle_initialize),
+    update(particle_update),
+    vertex(vertex, triangle_fan, particleVertexCount),
+    fragment_data(float),
+    fragment(fragment),
+    count(PARTICLE_COUNT),
+    background(vec3(0.0)),
+    blend(additive),
+    multisample(4);
+
+
+
+glsl vec4 combinedOutput(vec2 pos, float time) {
+    vec4 p1 = texture(WaveParticles, pos);
+    vec4 p2 = texture(Particles, pos);
+
+    return p1 + p2;
+}
+
+animation Combined = glsl(combinedOutput, RESOLUTION);
 
 
 
@@ -133,13 +194,13 @@ glsl vec4 blurredOutput(vec2 pos, float time) {
     for (int step = -STEPS; step <= STEPS; ++step) {
         vec2 texCoord = pos + DIRECTION*float(step)/float(STEPS)*blurRange*PXSIZE;
         float weight = blurWeight(float(step)/float(STEPS));
-        total += weight*texture(WaveParticles, texCoord);
+        total += weight*texture(Combined, texCoord);
         totalWeight += weight;
     }
     return total / totalWeight;
 }
 
-animation Blurred = glsl(blurredOutput, ivec2(512, 512)) : map(clamp);
+animation Blurred = glsl(blurredOutput, RESOLUTION) : map(clamp);
 
 
 
@@ -153,7 +214,7 @@ glsl vec4 finalOutput(vec2 pos, float time) {
     return vec4(vec3(combined.xyz * vignette), 1);
 }
 
-animation Final = glsl(multisampleAnimation<finalOutput, 4, 4>, ivec2(512, 512)) : map(clamp);
+animation Final = glsl(multisampleAnimation<finalOutput, 4, 4>, RESOLUTION) : map(clamp);
 
 //animation QuantizedOutputAnimation = quantize(Final, 64);
 //export gif(QuantizedOutputAnimation, "output/teleport_effect.gif", 30, 6, true);
