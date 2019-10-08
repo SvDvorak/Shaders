@@ -1,0 +1,42 @@
+// A plotting graph
+// Author: Viktor Chlumsky, 2017
+// Example usage:
+//   image WeightPlot = glsl(plot<blurWeight, -1.0, +1.0, 0.0, 1.0, 0.125, 0.125>, 1024, 512) : resizable;
+
+#define PLOT_SAMPLES 3
+
+template <FN, XMIN, XMAX, YMIN, YMAX, XGRID, YGRID>
+glsl vec4 plot(vec2 pos) {
+    vec2 tPos = vec2(
+        mix(float(XMIN), float(XMAX), pos.x),
+        mix(float(YMIN), float(YMAX), pos.y)
+    );
+    vec2 pxSize = vec2((XMAX)-(XMIN), (YMAX)-(YMIN))*shadron_PixelSize;
+
+    float opacity = 0.0;
+    for (int ys = 0; ys < PLOT_SAMPLES; ++ys)
+        for (int xs = 0; xs < PLOT_SAMPLES; ++xs) {
+            vec2 stPos = tPos+pxSize*vec2(float(2*xs-(PLOT_SAMPLES-1)), float(2*ys-(PLOT_SAMPLES-1)))*(1.0/float(2*PLOT_SAMPLES));
+            float y = FN(stPos.x);
+            float high = y;
+            float low = y;
+            for (int i = 1; i <= 4; ++i) {
+                float ny = FN(stPos.x+0.25*pxSize.x*float(i));
+                low = min(low, ny);
+                high = max(high, ny);
+                ny = FN(stPos.x-0.25*pxSize.x*float(i));
+                low = min(low, ny);
+                high = max(high, ny);
+            }
+            opacity += float(stPos.y >= low-pxSize.y && stPos.y <= high+pxSize.y);
+        }
+    
+    opacity *= 1.0/float(PLOT_SAMPLES*PLOT_SAMPLES);
+
+    vec2 grid = 0.5-abs(0.5-mod(tPos/vec2(XGRID, YGRID), vec2(1.0)));
+    if (abs(tPos.x) < pxSize.x || abs(tPos.y) < pxSize.y)
+        opacity += 0.5;
+    else if (grid.x*(XGRID) <= 0.5*pxSize.x || grid.y*(YGRID) <= 0.5*pxSize.y)
+        opacity += 0.25;
+    return vec4(0.0, 0.0, 0.0, opacity);
+}

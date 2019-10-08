@@ -1,0 +1,160 @@
+#include <math_constants>
+#include <affine_transform>
+#include <linearstep>
+#include <multisample>
+
+#extension ffmpeg
+#extension gif
+
+// Near/far values for projection (minimum and maximum draw distance)
+const float NEAR = 1.0/256.0, FAR = 256.0;
+const int PARTICLE_COUNT = 4;
+
+param int Sections = 80 : range(4, 80);
+param float Width = 0.056 : range(0.02, 0.3);
+param float Spacing = 3.8 : range(1, 10);
+param float Strength = 30 : range(1, 60);
+param vec3 Color = vec3(1) : color();
+param bool Wireframe = false;
+
+#define Vertices (2+Sections*2)
+
+glsl struct ParticleData {
+    float index;
+    float height;
+    float time;
+};
+
+glsl struct FragmentData {
+    float height;
+};
+
+glsl vec4 vertexShader(int index, float time, float offset, float shift) {
+    const float multiplier = 0.4;
+    int edgeIndex = int(index / 2);
+
+    float radius = 1 + (index % 2)*Width - offset*0.4;
+
+    vec3 coord = vec3(radius, offset*Spacing, radius);
+
+    float timeAdj = time * 1.5 + shift * 5;
+
+    coord = rotateY(coord, TAU/Sections * edgeIndex);
+    float edgeWrapped = (edgeIndex % Sections) / float(Sections) * Strength;
+    coord = translate(coord, vec3(
+        sin((edgeWrapped * 0.05 + 0.381)*20 + timeAdj) * 0.2, // In/out
+        sin(edgeWrapped * 0.5 + timeAdj) * sin(edgeWrapped * 0.05 + timeAdj) * 0.3, // Up/down
+        sin(edgeWrapped * 0.1 + timeAdj) * 0.05)); // Along edge
+
+    coord = rotateY(coord, time*0.5);
+    coord = rotateX(coord, 0.3);
+    coord = translate(coord, vec3(0, -2, -7.0));
+
+    float fov = 0.5*PI-atan(0.75+0.0625*shadron_Mouse.z);
+    return projectPerspectiveHFOV(coord, fov, NEAR, FAR);
+}
+
+glsl vec4 m_vert(out FragmentData fd, int index, float time) {
+    fd.height = 0.5;
+    return vertexShader(index, time, 0, 0);
+}
+
+glsl vec3 fragmentShader(in FragmentData fd) {
+    const vec3 transparent = vec3(0);
+    float heightFade = 0.8 * linearstep(0, 0.15, fd.height) * linearstep(1, 0.9, fd.height);
+    return mix(transparent, Color, heightFade);
+}
+
+glsl vec4 p_vert(out FragmentData fd, in ParticleData p, int index) {
+    fd.height = p.height;
+    return vertexShader(index, p.time, p.height, p.index);
+}
+
+glsl void initialize(out ParticleData p, int i) {
+    p.index = i;
+    p.height = float(i) / PARTICLE_COUNT;
+    p.time = i * 2;
+}
+
+glsl void update(inout ParticleData p, float dt) {
+    p.time += dt;
+    p.height = mod(p.height + dt / 3, 1);
+}
+
+model WaveCircle :
+    vertex_animated(m_vert, triangle_strip, Vertices),
+    fragment_data(FragmentData),
+    fragment(fragmentShader),
+    wireframe(Wireframe);
+
+particle_system animation WaveParticles :
+    dimensions(ivec2(512, 512)),
+    particle_data(ParticleData),
+    initialize(initialize),
+    update(update),
+    vertex(p_vert, triangle_strip, Vertices),
+    fragment_data(FragmentData),
+    fragment(fragmentShader),
+    count(PARTICLE_COUNT),
+    background(vec3(0.0)),
+    multisample(4);
+
+
+
+glsl struct DustParticleData {
+    float index;
+    float height;
+    float time;
+};
+
+glsl struct DustFragmentData {
+    float height;
+};
+
+// particle_system animation DustParticles :
+//     dimensions(ivec2(512, 512)),
+
+
+
+param int STEPS = 8;
+param float SIGMA = 0.288;
+param float blurRange = 4 : range(64);
+const vec2 DIRECTION = vec2(1, 0.0);
+
+#define PXSIZE shadron_PixelSize
+
+glsl float blurWeight(float x) {
+    return exp(-0.5*(x*x)/(SIGMA*SIGMA));
+}
+
+glsl vec4 blurredOutput(vec2 pos, float time) {
+    vec4 total = vec4(0.0);
+    float totalWeight = 0.0;
+    for (int step = -STEPS; step <= STEPS; ++step) {
+        vec2 texCoord = pos + DIRECTION*float(step)/float(STEPS)*blurRange*PXSIZE;
+        float weight = blurWeight(float(step)/float(STEPS));
+        total += weight*texture(WaveParticles, texCoord);
+        totalWeight += weight;
+    }
+    return total / totalWeight;
+}
+
+animation Blurred = glsl(blurredOutput, ivec2(512, 512)) : map(clamp);
+
+
+
+glsl vec4 finalOutput(vec2 pos, float time) {
+    vec2 toCenter = pos - vec2(0.5);
+    float vignette = 1.2 - sqrt(toCenter.x * toCenter.x + toCenter.y * toCenter.y);
+    
+    vec3 backgroundColor = vec3(0.6, 0.6, 0.65);
+    vec4 effectTexture = texture(Blurred, pos);
+    vec4 combined = (vec4(backgroundColor, 1 - effectTexture.a) + effectTexture);
+    return vec4(vec3(combined.xyz * vignette), 1);
+}
+
+animation Final = glsl(multisampleAnimation<finalOutput, 4, 4>, ivec2(512, 512)) : map(clamp);
+
+//animation QuantizedOutputAnimation = quantize(Final, 64);
+//export gif(QuantizedOutputAnimation, "output/teleport_effect.gif", 30, 6, true);
+export mp4(Final, "output/teleport_effect.mp4", h264, yuv420, "preset=slow,crf=4", 30, 8);

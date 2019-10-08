@@ -1,0 +1,36 @@
+// Blur shader
+// Author: Viktor Chlumsky, 2017
+
+#include "plot.shadron"
+
+image Input = file("dizzycircle_mnemonic_sample.png") : map(clamp);
+
+#define PXSIZE shadron_PixelSize
+
+param int STEPS = 8;
+param float SIGMA = 1;
+param float blurRange = 8 : range(256);
+
+glsl float blurWeight(float x) {
+    return exp(-0.5*(x*x)/(SIGMA*SIGMA));
+}
+
+template <TEXTURE, DIRECTION>
+glsl vec4 blur(vec2 coord) {
+    vec4 total = vec4(0.0);
+    float totalWeight = 0.0;
+    for (int step = -STEPS; step <= STEPS; ++step) {
+        vec2 texCoord = coord + DIRECTION*float(step)/float(STEPS)*blurRange*PXSIZE;
+        float weight = blurWeight(float(step)/float(STEPS));
+        total += weight*texture(TEXTURE, texCoord);
+        totalWeight += weight;
+    }
+    return total / totalWeight;
+}
+
+image WeightPlot = glsl(plot<blurWeight, -1.0, +1.0, 0.0, 1.0, 0.125, 0.125>, 1024, 512) : resizable;
+
+image Hblur = glsl(blur<Input, vec2(1.0, 0.0)>, sizeof(Input)) : map(clamp);
+image GaussianBlur = glsl(blur<Hblur, vec2(0.0, 1.0)>, sizeof(Input));
+
+//export png_foreach(GaussianBlur, "output/?.png") : Input("input/?.png");
