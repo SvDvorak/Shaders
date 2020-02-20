@@ -4,13 +4,13 @@ Various shader things I've made. Most of them are [Shadron](https://store.steamp
 
 ![](Shadron/teleport_effect.gif)
 
-[Teleport effect](https://github.com/SvDvorak/Shaders/blob/master/Shadron/teleport_effect.shadron)
+[Teleport effect](Shadron/teleport_effect.shadron)
 
 <br>
 
 ![](AdventOfShaders/Day_14_crosshatch_shading.gif)
 
-[Crosshatch shading](AdventOfShaders/Day_14_crosshatch_shading.gif)
+[Crosshatch shading](AdventOfShaders/Day_14_crosshatch_shading.shadron)
 
 <br>
 
