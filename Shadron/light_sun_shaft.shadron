@@ -1,0 +1,12 @@
+#include <perlin>
+
+glsl float noise(float val) {
+    return perlinNoise(vec2(val));
+}
+
+glsl vec4 sunShaft(vec2 pos) {
+    float noise = 0.8 + noise(pos.x*10);
+    return vec4(vec3(noise), 1);
+}
+
+image SunShaft = glsl(sunShaft, vec2(512, 256));
