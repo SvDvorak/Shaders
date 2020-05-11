@@ -1,0 +1,60 @@
+#include <math_constants>
+#include <affine_transform>
+#include <perlin>
+
+// By Andreas Wilcox, 2020
+// TODO: Add normal calculation in vert, for lighting setup
+
+const float NEAR = 1.0/256.0, FAR = 256.0;
+
+// param float Width = 0.056 : range(0.02, 0.3);
+// param float Spacing = 4 : range(1, 10);
+// param float Strength = 32 : range(1, 60);
+// param vec3 Color = vec3(1) : color();
+
+param int GroundSize = 2 : range(1, 80);
+param bool Wireframe = false;
+
+#define EdgeVerts (GroundSize*6)
+#define TotalVertices (EdgeVerts*GroundSize)
+
+glsl struct FragmentData {
+    float height;
+    vec3 normal;
+};
+
+glsl float random(int seed, int salt) {
+    vec2 pCoord = mod(vec2(1949.1797*float(seed), 33.1478221*float(salt)), 1823.5355121);
+    return 0.5*(perlinNoise(pCoord)+1.0);
+}
+
+glsl vec4 groundVerts(out FragmentData fd, int index, float time) {
+    int column = index / EdgeVerts;
+    int triangleId = index / 3;
+
+    vec3 coord = vec3(index % 2 + column, 0, index / 2 - triangleId - column*GroundSize);
+
+    float height = perlinNoise(coord * 0.1) + perlinNoise(coord * 0.4) * 0.5;
+    coord = translate(coord, vec3(-GroundSize / 2, height, -GroundSize / 2));
+    coord = rotateY(coord, time*0.5);
+    coord = rotateY(coord, PI);
+    coord = rotateX(coord, 0.3);
+    coord = translate(coord, vec3(0, -2, -20.0 + shadron_Mouse.z));
+
+    fd.height = height;
+    // fd.normal = vec3()
+
+    // float fov = 0.5*PI-atan(0.75+0.0625*shadron_Mouse.z);
+    return projectPerspectiveHFOV(coord, PI/3, NEAR, FAR);
+}
+
+glsl vec4 groundFragment(in FragmentData fd) {
+    vec4 color = vec4(fd.height, 1 - fd.height, 0, 1);
+    return color;
+}
+
+model WaveCircle :
+    vertex_animated(groundVerts, triangles, TotalVertices),
+    fragment_data(FragmentData),
+    fragment(groundFragment),
+    wireframe(Wireframe);
